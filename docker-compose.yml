@@ -1,0 +1,44 @@
+version: '3'
+
+services:
+  concourse-db:
+    image: postgres
+    volumes: ["database:/database"]
+    environment:
+    - POSTGRES_USER=concourse
+    - PGDATA=/database
+
+  concourse:
+    image: concourse/concourse
+    command: quickstart
+    privileged: true
+    depends_on: [concourse-db, s3]
+    ports: ["8080:8080"]
+    restart: always
+    environment:
+    - CONCOURSE_POSTGRES_HOST=concourse-db
+    - CONCOURSE_POSTGRES_USER=concourse
+    - CONCOURSE_POSTGRES_PASSWORD=concourse
+    - CONCOURSE_POSTGRES_DATABASE=concourse
+    - CONCOURSE_EXTERNAL_URL=http://localhost:8080
+    - CONCOURSE_ADD_LOCAL_USER=example:password
+    - CONCOURSE_MAIN_TEAM_LOCAL_USER=example
+
+  s3:
+    image: minio/minio
+    command: server /data
+    ports: ["9000:9000"]
+    volumes: ["storage:/data"]
+    environment:
+    - MINIO_ACCESS_KEY=example
+    - MINIO_SECRET_KEY=password
+
+  web:
+    image: nginx
+    ports: ["8000:80"]
+    volumes: ["storage:/usr/share/nginx/html"]
+    depends_on: [s3]
+
+volumes:
+  database:
+  storage:
