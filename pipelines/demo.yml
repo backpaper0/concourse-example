@@ -1,0 +1,76 @@
+resource_types:
+- name: maven-resource
+  type: docker-image
+  source:
+    repository: nulldriver/maven-resource
+
+resources:
+- name: demo
+  type: git
+  source:
+    uri: http://gitbucket:8080/git/root/demo.git
+- name: artifact
+  type: maven-resource
+  source:
+    url: http://nexus:8081/repository/maven-releases/
+    snapshot_url: http://nexus:8081/repository/maven-snapshots/
+    artifact: com.example:demo:jar
+    username: admin
+    password: admin
+
+jobs:
+
+- name: test
+  plan:
+  - get: demo
+    trigger: true
+  - task: test
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source: {repository: openjdk, tag: 8}
+      inputs:
+      - name: demo
+      caches:
+      - path: m2
+      run:
+        path: bash
+        args:
+        - -c
+        - |-
+          set -eu
+          cd demo
+          ./mvnw -B -s settings.xml -Dmaven.repo.local=../m2 test
+
+- name: deploy
+  plan:
+  - get: demo
+    trigger: true
+    passed: [test]
+  - task: deploy
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source: {repository: openjdk, tag: 8}
+      inputs:
+      - name: demo
+      caches:
+      - path: m2
+      run:
+        path: bash
+        args:
+        - -c
+        - |-
+          set -eu
+          ln -s `pwd`/target demo/target
+          cd demo
+          ./mvnw -B -s settings.xml -Dmaven.repo.local=../m2 -Dmaven.test.skip=true package
+      outputs:
+      - name: target
+  - put: artifact
+    params:
+      file: target/demo-*.jar
+      pom_file: demo/pom.xml
+
